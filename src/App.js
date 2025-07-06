@@ -16,30 +16,24 @@ import {
     orderBy,
     doc,
     deleteDoc,
-    writeBatch
+    writeBatch,
+    setDoc,
+    getDoc
 } from 'firebase/firestore';
 
 // --- Configuração do Firebase ---
-// NOTA: Cole aqui a configuração do seu projeto Firebase.
-// Você pode encontrar isso no console do Firebase em:
-// Configurações do projeto > Geral > Seus apps > App da Web > Objeto de configuração do Firebase
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-    apiKey: "AIzaSyAFESdDeRkZtvIQyjFraUhYjHirFNrm3IA",
-    authDomain: "financeiroroyalcup.firebaseapp.com",
-    projectId: "financeiroroyalcup",
-    storageBucket: "financeiroroyalcup.firebasestorage.app",
-    messagingSenderId: "680963908575",
-    appId: "1:680963908575:web:54cf6c2a06b54f7ab31a6a",
-    measurementId: "G-NZBFXGKRDB"
-  };
+  apiKey: "AIzaSyAFESdDeRkZtvIQyjFraUhYjHirFNrm3IA",
+  authDomain: "financeiroroyalcup.firebaseapp.com",
+  projectId: "financeiroroyalcup",
+  storageBucket: "financeiroroyalcup.firebasestorage.app",
+  messagingSenderId: "680963908575",
+  appId: "1:680963908575:web:54cf6c2a06b54f7ab31a6a"
+};
 
-// --- Inicialização dos Serviços ---
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-
-// --- Componentes da UI ---
 
 const AuthPage = ({ setUser }) => {
     const [email, setEmail] = useState('');
@@ -57,7 +51,7 @@ const AuthPage = ({ setUser }) => {
                 await createUserWithEmailAndPassword(auth, email, password);
             }
         } catch (err) {
-            setError(err.message);
+            setError(err.message.replace('Firebase: ', ''));
         }
     };
 
@@ -66,7 +60,7 @@ const AuthPage = ({ setUser }) => {
             <div className="w-full max-w-md p-8 space-y-6 bg-gray-800 rounded-lg shadow-lg">
                 <div className="text-center">
                     <h1 className="text-3xl font-bold text-yellow-400">Royal Cup Finance</h1>
-                    <p className="text-gray-400">{isLogin ? 'Acesse sua conta' : 'Crie uma nova conta'}</p>
+                    <p className="text-gray-400">{isLogin ? 'Aceda à sua conta' : 'Crie uma nova conta'}</p>
                 </div>
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
@@ -89,12 +83,12 @@ const AuthPage = ({ setUser }) => {
                             required
                         />
                     </div>
-                    {error && <p className="text-sm text-red-500">{error}</p>}
+                    {error && <p className="text-sm text-center text-red-500">{error}</p>}
                     <button
                         type="submit"
                         className="w-full py-2 font-semibold text-gray-900 bg-yellow-400 rounded-md hover:bg-yellow-500 transition-colors"
                     >
-                        {isLogin ? 'Entrar' : 'Cadastrar'}
+                        {isLogin ? 'Entrar' : 'Registar'}
                     </button>
                     <p className="text-sm text-center text-gray-400">
                         {isLogin ? 'Não tem uma conta?' : 'Já tem uma conta?'}
@@ -103,7 +97,7 @@ const AuthPage = ({ setUser }) => {
                             onClick={() => setIsLogin(!isLogin)}
                             className="ml-1 font-semibold text-yellow-400 hover:underline"
                         >
-                            {isLogin ? 'Cadastre-se' : 'Faça login'}
+                            {isLogin ? 'Registe-se' : 'Faça login'}
                         </button>
                     </p>
                 </form>
@@ -112,7 +106,48 @@ const AuthPage = ({ setUser }) => {
     );
 };
 
-const TransactionForm = () => {
+const MillerOrrModel = ({ settings, setSettings }) => {
+    const handleSave = async (e) => {
+        e.preventDefault();
+        const settingsRef = doc(db, 'settings', 'millerOrr');
+        await setDoc(settingsRef, settings);
+        alert('Configurações guardadas!');
+    };
+
+    const { Z, H } = useMemo(() => {
+        const L = parseFloat(settings.lowerLimit) || 0;
+        const b = parseFloat(settings.transactionCost) || 0;
+        const i = parseFloat(settings.dailyInterestRate) / 100 || 0;
+        const variance = parseFloat(settings.variance) || 0;
+
+        if (i === 0) return { Z: L, H: L };
+
+        const Z_calc = Math.cbrt((3 * b * variance) / (4 * i)) + L;
+        const H_calc = 3 * Z_calc - 2 * L;
+
+        return { Z: Z_calc, H: H_calc };
+    }, [settings]);
+
+    return (
+        <div className="p-6 bg-gray-800 rounded-lg shadow-md">
+            <h2 className="text-xl font-bold mb-4 text-white">Modelo Miller-Orr</h2>
+            <form onSubmit={handleSave} className="space-y-4">
+                <input type="number" value={settings.lowerLimit} onChange={e => setSettings({...settings, lowerLimit: e.target.value})} placeholder="Limite Inferior (L)" className="w-full px-3 py-2 text-white bg-gray-700 border border-gray-600 rounded-md" />
+                <input type="number" value={settings.transactionCost} onChange={e => setSettings({...settings, transactionCost: e.target.value})} placeholder="Custo da Transação (b)" className="w-full px-3 py-2 text-white bg-gray-700 border border-gray-600 rounded-md" />
+                <input type="number" value={settings.dailyInterestRate} onChange={e => setSettings({...settings, dailyInterestRate: e.target.value})} placeholder="Juros Diários (%)" className="w-full px-3 py-2 text-white bg-gray-700 border border-gray-600 rounded-md" />
+                <input type="number" value={settings.variance} onChange={e => setSettings({...settings, variance: e.target.value})} placeholder="Variância (σ²)" className="w-full px-3 py-2 text-white bg-gray-700 border border-gray-600 rounded-md" />
+                <button type="submit" className="w-full py-2 font-semibold text-gray-900 bg-blue-500 rounded-md hover:bg-blue-600">Guardar Configurações</button>
+            </form>
+            <div className="mt-6 text-white space-y-2">
+                <p><strong>Limite Inferior (L):</strong> R$ {parseFloat(settings.lowerLimit || 0).toFixed(2)}</p>
+                <p><strong>Nível Ótimo (Z):</strong> R$ {Z.toFixed(2)}</p>
+                <p><strong>Limite Superior (H):</strong> R$ {H.toFixed(2)}</p>
+            </div>
+        </div>
+    );
+};
+
+const TransactionForm = ({}) => {
     const [amount, setAmount] = useState('');
     const [description, setDescription] = useState('');
     const [type, setType] = useState('expense');
@@ -261,25 +296,46 @@ const TransactionList = ({ transactions, setTransactions }) => {
 
 const Dashboard = ({ user }) => {
     const [transactions, setTransactions] = useState([]);
+    const [settings, setSettings] = useState({
+        lowerLimit: '1000',
+        transactionCost: '25',
+        dailyInterestRate: '0.01',
+        variance: '100000',
+    });
 
     useEffect(() => {
+        // Listener para transações
         const q = query(collection(db, "transactions"), orderBy("createdAt", "desc"));
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
-            const transactionsData = [];
-            querySnapshot.forEach((doc) => {
-                transactionsData.push({ ...doc.data(), id: doc.id });
-            });
-            setTransactions(transactionsData);
+        const unsubscribeTransactions = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            setTransactions(data);
         });
 
-        return () => unsubscribe();
+        // Listener para configurações
+        const settingsRef = doc(db, 'settings', 'millerOrr');
+        const unsubscribeSettings = onSnapshot(settingsRef, (doc) => {
+            if (doc.exists()) {
+                setSettings(doc.data());
+            }
+        });
+
+        return () => {
+            unsubscribeTransactions();
+            unsubscribeSettings();
+        };
     }, []);
 
-    const balance = useMemo(() => {
-        return transactions.reduce((acc, t) => {
-            return t.type === 'income' ? acc + t.value : acc - t.value;
-        }, 0);
-    }, [transactions]);
+    const balance = useMemo(() => transactions.reduce((acc, t) => t.type === 'income' ? acc + t.value : acc - t.value, 0), [transactions]);
+
+    const balanceStatusStyle = useMemo(() => {
+        const L = parseFloat(settings.lowerLimit) || 0;
+        const H = 3 * (Math.cbrt((3 * parseFloat(settings.transactionCost) * parseFloat(settings.variance)) / (4 * (parseFloat(settings.dailyInterestRate)/100))) + L) - 2 * L;
+
+        if (balance < L) return 'bg-gradient-to-br from-red-500 to-red-700'; // Abaixo do limite
+        if (balance > H) return 'bg-gradient-to-br from-blue-500 to-blue-700'; // Acima do limite
+        return 'bg-gradient-to-br from-yellow-400 to-yellow-600'; // Dentro da faixa
+    }, [balance, settings]);
+
 
     return (
         <div className="bg-gray-900 min-h-screen p-4 sm:p-6 lg:p-8">
@@ -287,32 +343,27 @@ const Dashboard = ({ user }) => {
                 <h1 className="text-3xl font-bold text-yellow-400">Royal Cup Finance</h1>
                 <div className="flex items-center space-x-4">
                     <span className="text-white hidden sm:block">{user.email}</span>
-                    <button
-                        onClick={() => signOut(auth)}
-                        className="px-4 py-2 font-semibold text-gray-900 bg-yellow-400 rounded-md hover:bg-yellow-500 transition-colors"
-                    >
-                        Sair
-                    </button>
+                    <button onClick={() => signOut(auth)} className="px-4 py-2 font-semibold text-gray-900 bg-yellow-400 rounded-md hover:bg-yellow-500">Sair</button>
                 </div>
             </header>
 
-            <main className="max-w-4xl mx-auto">
-                <div className="p-8 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-lg shadow-xl text-center mb-6">
+            <main className="max-w-6xl mx-auto">
+                <div className={`p-8 rounded-lg shadow-xl text-center mb-6 transition-colors duration-500 ${balanceStatusStyle}`}>
                     <h2 className="text-lg font-semibold text-gray-800">Saldo Atual</h2>
-                    <p className={`text-5xl font-bold ${balance >= 0 ? 'text-gray-900' : 'text-red-900'}`}>
-                        R$ {balance.toFixed(2)}
-                    </p>
+                    <p className={`text-5xl font-bold text-gray-900`}>R$ {balance.toFixed(2)}</p>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <TransactionForm />
-                    <TransactionList transactions={transactions} setTransactions={setTransactions} />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2">
+                        <TransactionForm />
+                        <TransactionList transactions={transactions} setTransactions={setTransactions} />
+                    </div>
+                    <MillerOrrModel settings={settings} setSettings={setSettings} />
                 </div>
             </main>
         </div>
     );
 };
-
 
 export default function App() {
     const [user, setUser] = useState(null);
@@ -327,7 +378,7 @@ export default function App() {
     }, []);
 
     if (loading) {
-        return <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">Carregando...</div>;
+        return <div className="flex items-center justify-center min-h-screen bg-gray-900 text-white">A carregar...</div>;
     }
 
     return user ? <Dashboard user={user} /> : <AuthPage setUser={setUser} />;
